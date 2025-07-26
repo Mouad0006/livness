@@ -8,17 +8,29 @@ app.use(bodyParser.json());
 
 app.get('/', (req, res) => {
     res.send(`
-    <html>
+    <html lang="ar" dir="rtl">
       <head>
         <title>BLS Liveness Bridge</title>
         <meta charset="utf-8"/>
+        <style>
+            body { font-family:sans-serif; background: #fafbfe; }
+            .container { max-width: 600px; margin: 40px auto; background: #fff; padding: 24px 30px 40px 30px; border-radius: 18px; box-shadow: 0 2px 18px #0001; }
+            textarea { width:95%; min-height:60px; font-size:1.1em; margin-bottom:12px;}
+            button { background:#2366f2; color:#fff; padding:10px 30px; border:none; border-radius:7px; font-size:1.1em; cursor:pointer; margin-bottom:20px;}
+            #cam { margin:15px 0; border-radius: 10px; }
+            #canvas { display:none;}
+            .hide {display:none;}
+        </style>
       </head>
-      <body style="font-family:sans-serif">
-        <h2>أدخل كود الجلسة المستخرج من جهازك الأصلي</h2>
+      <body>
+        <div class="container">
+        <h2>جسر السيلفي - BLS Liveness Bridge</h2>
         <form action="/liveness" method="POST">
-          <textarea name="code" rows="5" cols="80" placeholder="ألصق الكود هنا"></textarea><br><br>
+          <label>ألصق هنا كود الجلسة المستخرج من جهازك الأصلي:</label><br>
+          <textarea name="code" required placeholder="ألصق الكود هنا"></textarea><br>
           <button type="submit">بدء جلسة السيلفي</button>
         </form>
+        </div>
       </body>
     </html>
     `);
@@ -31,50 +43,67 @@ app.post('/liveness', (req, res) => {
     }
     let data;
     try {
-        // فك الكود بالطريقة الصحيحة (يدعم العربية)
+        // يدعم العربية وجميع الرموز
         let decoded = Buffer.from(code, 'base64').toString();
         data = JSON.parse(decodeURIComponent(decoded));
     } catch (e) {
-        return res.send('كود غير صحيح أو غير قابل للفك!');
+        return res.send('❌ كود غير صحيح أو غير قابل للفك!');
     }
 
     res.send(`
-    <html>
+    <html lang="ar" dir="rtl">
       <head>
-        <title>Liveness Session</title>
+        <title>جلسة السيلفي</title>
         <meta charset="utf-8"/>
+        <style>
+            body { font-family:sans-serif; background: #fafbfe; }
+            .container { max-width: 600px; margin: 40px auto; background: #fff; padding: 24px 30px 40px 30px; border-radius: 18px; box-shadow: 0 2px 18px #0001; }
+            button { background:#2366f2; color:#fff; padding:10px 30px; border:none; border-radius:7px; font-size:1.1em; cursor:pointer; margin-bottom:20px;}
+            #cam { margin:15px 0; border-radius: 10px; }
+            #canvas { display:none;}
+        </style>
       </head>
       <body>
+        <div class="container">
         <h3>جلسة السيلفي (Bridge)</h3>
-        <form id="livenessForm">
+        <form id="livenessForm" onsubmit="return false;">
           <input type="hidden" id="AppointmentData" value="${data.appointmentData || ''}">
           <input type="hidden" id="LivenessData" value="${data.livenessData || ''}">
           <input type="hidden" name="__RequestVerificationToken" value="${data.rToken || ''}">
           <div>
-            <button type="button" onclick="startLiveness()">ابدأ التحقق بالسيلفي</button>
+            <button type="button" id="startBtn">ابدأ التحقق بالسيلفي</button>
           </div>
-          <video id="cam" width="320" height="240" autoplay style="display:none"></video>
-          <canvas id="canvas" width="320" height="240" style="display:none"></canvas>
+          <video id="cam" width="340" height="240" autoplay class="hide"></video>
+          <canvas id="canvas" width="340" height="240"></canvas>
           <div id="result"></div>
         </form>
+        </div>
         <script>
-        function startLiveness() {
+        // إذا ضغط المستخدم "ابدأ" نطلب إذن الكاميرا
+        document.getElementById('startBtn').onclick = function startLiveness() {
             var video = document.getElementById('cam');
-            video.style.display = "block";
+            var btn = document.getElementById('startBtn');
+            video.classList.remove("hide");
+            btn.disabled = true;
+            btn.innerText = "يتم تشغيل الكاميرا...";
             navigator.mediaDevices.getUserMedia({ video: true })
             .then(stream => {
                 video.srcObject = stream;
+                btn.innerText = "انتظر... يتم التقاط الصورة";
                 setTimeout(() => {
                     var canvas = document.getElementById('canvas');
-                    canvas.style.display = "block";
                     canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
                     video.srcObject.getTracks().forEach(track => track.stop());
+                    video.classList.add("hide");
                     let img = canvas.toDataURL("image/png");
-                    document.getElementById('result').innerHTML = '<p>تم التقاط السيلفي!</p><img src="'+img+'" width="150"/><br><button onclick="downloadCode()">توليد كود العودة</button>';
+                    document.getElementById('result').innerHTML = '<p>✅ تم التقاط السيلفي!</p><img src="'+img+'" width="140"/><br><button onclick="downloadCode()">توليد كود العودة</button>';
                     window._selfieData = img;
-                }, 2000);
+                    btn.innerText = "تم الانتهاء";
+                }, 2200); // بعد ثانيتين وربع
             }).catch(e => {
-                alert('لا يمكن الوصول للكاميرا');
+                alert('❌ لا يمكن الوصول للكاميرا: ' + e);
+                btn.innerText = "ابدأ التحقق بالسيلفي";
+                btn.disabled = false;
             });
         }
 
@@ -92,7 +121,8 @@ app.post('/liveness', (req, res) => {
             document.body.appendChild(ta);
             ta.select();
             document.execCommand("copy");
-            alert("تم نسخ كود العودة! يمكنك الآن لصقه في الجهاز الأصلي أو أي مكان.");
+            ta.remove();
+            alert("✅ تم نسخ كود العودة! يمكنك الآن لصقه في جهازك الأصلي.");
         }
         </script>
       </body>
@@ -103,3 +133,4 @@ app.post('/liveness', (req, res) => {
 app.listen(port, () => {
     console.log(`Liveness Bridge running at http://localhost:${port}`);
 });
+
